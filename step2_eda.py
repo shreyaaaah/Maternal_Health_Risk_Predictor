@@ -21,7 +21,7 @@ X_scaled = pd.read_csv('X_scaled.csv')
 X_raw = pd.read_csv('X_raw.csv')
 source = pd.read_csv('source_labels.csv')
 
-print(f"\n✅ Loaded: {X_scaled.shape[0]} rows, {X_scaled.shape[1]} features")
+print(f"\n[OK] Loaded: {X_scaled.shape[0]} rows, {X_scaled.shape[1]} features")
 
 # ─────────────────────────────────────────────
 # 1. CORRELATION HEATMAP
@@ -55,7 +55,7 @@ plt.suptitle('Maternal Health Combined Dataset — EDA', fontsize=16, fontweight
 plt.tight_layout()
 plt.savefig('eda_overview.png', dpi=150, bbox_inches='tight')
 plt.close()
-print("      ✅ Saved: eda_overview.png")
+print("      [OK] Saved: eda_overview.png")
 
 # ─────────────────────────────────────────────
 # 2. PCA — Variance Explained
@@ -72,7 +72,7 @@ n_components_95 = np.argmax(cumvar >= 0.95) + 1
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 # Scree plot
-axes[0].bar(range(1, min(21, len(pca.explained_variance_ratio_))+1),
+axes[0].bar(range(1, 21),
             pca.explained_variance_ratio_[:20] * 100,
             color='#2A9D8F', alpha=0.8, edgecolor='white')
 axes[0].set_xlabel('Principal Component')
@@ -96,8 +96,8 @@ plt.suptitle(f'PCA Analysis — {n_components_95} components explain 95% varianc
 plt.tight_layout()
 plt.savefig('pca_analysis.png', dpi=150, bbox_inches='tight')
 plt.close()
-print(f"      ✅ {n_components_95} components explain 95% variance")
-print("      ✅ Saved: pca_analysis.png")
+print(f"      [OK] {n_components_95} components explain 95% variance")
+print("      [OK] Saved: pca_analysis.png")
 
 # PCA transform for clustering
 pca_final = PCA(n_components=n_components_95)
@@ -136,10 +136,10 @@ ax.grid(alpha=0.2)
 plt.tight_layout()
 plt.savefig('umap_preview.png', dpi=150, bbox_inches='tight')
 plt.close()
-print("      ✅ Saved: umap_preview.png")
+print("      [OK] Saved: umap_preview.png")
 
 print("\n" + "=" * 60)
-print("  ✅ Step 2 Complete!")
-print(f"  PCA reduced dimensions: {X_scaled.shape[1]} → {n_components_95}")
+print("  [SUCCESS] Step 2 Complete!")
+print(f"  PCA reduced dimensions: {X_scaled.shape[1]} -> {n_components_95}")
 print("  Saved: X_pca.npy, X_umap.npy, umap_model.pkl, pca_model.pkl")
 print("=" * 60)

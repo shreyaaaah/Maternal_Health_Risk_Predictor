@@ -135,9 +135,12 @@ ALL_FEATURES = ['age', 'systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_temp'
                 'histogram_width', 'histogram_min', 'histogram_max',
                 'histogram_peaks', 'histogram_zeros', 'histogram_mode',
                 'histogram_mean', 'histogram_median', 'histogram_variance',
-                'histogram_tendency']
+                'histogram_tendency', 'pulse_pressure']
 
 def predict_cluster(vitals_dict):
+    # Calculate pulse pressure
+    vitals_dict['pulse_pressure'] = vitals_dict.get('systolic_bp', 120) - vitals_dict.get('diastolic_bp', 80)
+    
     row = pd.DataFrame([{feat: vitals_dict.get(feat, np.nan) for feat in ALL_FEATURES}])
     row_imputed = imputer.transform(row)
     row_scaled = scaler.transform(row_imputed)
@@ -231,10 +234,19 @@ with col1:
         if "HIGH" in cluster_name:
             st.session_state.alert_count += 1
             st.error(f"🚨 ALERT: Patient {patient_id} flagged as HIGH RISK!")
+            st.markdown("#### 🏥 Clinical Recommendations:")
+            st.markdown("- **Urgent OB/GYN Consultation Required**")
+            st.markdown("- Continuous Fetal Monitoring (CTG)")
+            st.markdown("- BP stabilization and blood sugar assessment")
         elif "MEDIUM" in cluster_name:
             st.warning(f"⚠️ Patient {patient_id} — Monitor closely")
+            st.markdown("#### 📝 Recommended Actions:")
+            st.markdown("- Repeat vitals in 4 hours")
+            st.markdown("- Dietary review and hydration")
         else:
             st.success(f"✅ Patient {patient_id} — Stable")
+            st.markdown("#### ✅ Routine Care:")
+            st.markdown("- Standard prenatal checkup schedule")
     
     else:
         st.info("👈 Enter patient vitals in the sidebar to assess risk")

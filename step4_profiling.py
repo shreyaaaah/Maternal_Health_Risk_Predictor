@@ -23,7 +23,7 @@ X_raw['cluster'] = labels
 X_raw['source'] = source['source']
 
 n_clusters = len(set(labels))
-print(f"\n✅ Loaded {len(X_raw)} patients across {n_clusters} clusters")
+print(f"\n[OK] Loaded {len(X_raw)} patients across {n_clusters} clusters")
 
 # ─────────────────────────────────────────────
 # 1. CLUSTER PROFILES — Mean Stats
@@ -61,37 +61,37 @@ def name_cluster(row, all_profiles):
     risk_score = 0
     flags = []
     
-    # Blood pressure check
-    if row.get('systolic_bp', 0) > overall.get('systolic_bp', 0) * 1.1:
-        risk_score += 2
-        flags.append("High BP")
+    # Blood pressure check (Preeclampsia risk)
+    if row.get('systolic_bp', 0) > overall.get('systolic_bp', 0) * 1.05:
+        risk_score += 3
+        flags.append("Hypertension (Preeclampsia Risk)")
     
-    # Blood sugar check
-    if row.get('blood_sugar', 0) > overall.get('blood_sugar', 0) * 1.15:
-        risk_score += 2
-        flags.append("High Glucose")
+    # Blood sugar check (Gestational Diabetes risk)
+    if row.get('blood_sugar', 0) > overall.get('blood_sugar', 0) * 1.1:
+        risk_score += 3
+        flags.append("Hyperglycemia (Gestational Diabetes Risk)")
     
     # Heart rate
-    if row.get('heart_rate', 0) > overall.get('heart_rate', 0) * 1.1:
+    if row.get('heart_rate', 0) > overall.get('heart_rate', 0) * 1.05:
         risk_score += 1
-        flags.append("Elevated HR")
+        flags.append("Maternal Tachycardia")
     
-    # Fetal variability (CTG)
-    if row.get('pct_abnormal_stv', 0) > overall.get('pct_abnormal_stv', 0) * 1.2:
+    # Fetal variability (CTG) - Critical
+    if row.get('pct_abnormal_stv', 0) > overall.get('pct_abnormal_stv', 0) * 1.1:
+        risk_score += 4
+        flags.append("Abnormal Fetal HRV (Hypoxia Risk)")
+    
+    # Histogram variance
+    if row.get('histogram_variance', 0) > overall.get('histogram_variance', 0) * 1.2:
         risk_score += 2
-        flags.append("Abnormal Fetal Variability")
-    
-    # Histogram variance (fetal pattern irregularity)
-    if row.get('histogram_variance', 0) > overall.get('histogram_variance', 0) * 1.3:
-        risk_score += 1
-        flags.append("Irregular FHR Pattern")
-    
-    if risk_score >= 4:
-        return f"🔴 HIGH RISK", flags
+        flags.append("Fetal Pattern Irregularity")
+
+    if risk_score >= 5:
+        return "HIGH RISK (Critical)", flags
     elif risk_score >= 2:
-        return f"🟡 MEDIUM RISK", flags
+        return "MEDIUM RISK (Monitor)", flags
     else:
-        return f"🟢 LOW RISK", flags
+        return "LOW RISK (Stable)", flags
 
 cluster_names = {}
 for cluster_id in range(n_clusters):
@@ -147,7 +147,7 @@ plt.suptitle('Maternal Health — Discovered Risk Clusters', fontsize=14, fontwe
 plt.tight_layout()
 plt.savefig('cluster_profiles.png', dpi=150, bbox_inches='tight')
 plt.close()
-print("      ✅ Saved: cluster_profiles.png")
+print("      [OK] Saved: cluster_profiles.png")
 
 # Box plots for key features
 fig, axes = plt.subplots(2, 4, figsize=(20, 10))
@@ -169,9 +169,9 @@ plt.suptitle('Feature Distribution per Cluster', fontsize=14, fontweight='bold')
 plt.tight_layout()
 plt.savefig('cluster_boxplots.png', dpi=150, bbox_inches='tight')
 plt.close()
-print("      ✅ Saved: cluster_boxplots.png")
+print("      [OK] Saved: cluster_boxplots.png")
 
 print("\n" + "=" * 60)
-print("  ✅ Step 4 Complete! Clusters profiled and named.")
+print("  [SUCCESS] Step 4 Complete! Clusters profiled and named.")
 print("  Saved: cluster_profiles.png, cluster_boxplots.png")
 print("=" * 60)

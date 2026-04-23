@@ -65,8 +65,14 @@ plt.tight_layout()
 plt.savefig('kmeans_elbow.png', dpi=150, bbox_inches='tight')
 plt.close()
 
-best_k = k_range[np.argmax(silhouettes)]
-print(f"\n      ✅ Best k = {best_k} (Silhouette = {max(silhouettes):.3f})")
+# Select best k (preferring more clusters if silhouette is similar)
+max_sil = max(silhouettes)
+best_k = k_range[0]
+for i, sil in enumerate(silhouettes):
+    if sil >= max_sil * 0.9:  # within 10% of max
+        best_k = k_range[i]
+
+print(f"\n      [OK] Selected k = {best_k} (Silhouette = {silhouettes[k_range.index(best_k)]:.3f})")
 
 # Final K-Means model
 kmeans_final = KMeans(n_clusters=best_k, random_state=42, n_init=10)
@@ -74,23 +80,44 @@ labels_kmeans = kmeans_final.fit_predict(X)
 pickle.dump(kmeans_final, open('kmeans_model.pkl', 'wb'))
 
 # ─────────────────────────────────────────────
-# 2. HDBSCAN
+# ─────────────────────────────────────────────
+# 2. HDBSCAN — Tuning min_cluster_size
 # ─────────────────────────────────────────────
 
-print("\n[2/3] Running HDBSCAN...")
+print("\n[2/3] Tuning HDBSCAN...")
 
-hdb = hdbscan.HDBSCAN(min_cluster_size=50, min_samples=10, 
-                       cluster_selection_epsilon=0.5, prediction_data=True)
-labels_hdbscan = hdb.fit_predict(X)
+best_hdb_sil = -1
+best_hdb_params = {}
+best_labels_hdb = None
+best_hdb_model = None
+
+for mcs in [30, 50, 80]:
+    for ms in [5, 10, 15]:
+        hdb_test = hdbscan.HDBSCAN(min_cluster_size=mcs, min_samples=ms, prediction_data=True)
+        labels_test = hdb_test.fit_predict(X)
+        
+        valid_mask = labels_test != -1
+        if valid_mask.sum() > 100 and len(set(labels_test[valid_mask])) > 1:
+            sil = silhouette_score(X[valid_mask], labels_test[valid_mask])
+            if sil > best_hdb_sil:
+                best_hdb_sil = sil
+                best_hdb_params = {'mcs': mcs, 'ms': ms}
+                best_labels_hdb = labels_test
+                best_hdb_model = hdb_test
+
+if best_hdb_model:
+    hdb = best_hdb_model
+    labels_hdbscan = best_labels_hdb
+    sil_hdb = best_hdb_sil
+    print(f"      Best Params      : min_cluster_size={best_hdb_params['mcs']}, min_samples={best_hdb_params['ms']}")
+else:
+    # Fallback if no valid clusters found
+    hdb = hdbscan.HDBSCAN(min_cluster_size=50)
+    labels_hdbscan = hdb.fit_predict(X)
+    sil_hdb = 0
 
 n_clusters_hdb = len(set(labels_hdbscan)) - (1 if -1 in labels_hdbscan else 0)
 noise_pct = (labels_hdbscan == -1).sum() / len(labels_hdbscan) * 100
-
-valid_mask = labels_hdbscan != -1
-if valid_mask.sum() > 0 and len(set(labels_hdbscan[valid_mask])) > 1:
-    sil_hdb = silhouette_score(X[valid_mask], labels_hdbscan[valid_mask])
-else:
-    sil_hdb = 0
 
 print(f"      Clusters found   : {n_clusters_hdb}")
 print(f"      Noise points     : {noise_pct:.1f}%")
@@ -112,7 +139,7 @@ print(f"      Silhouette score : {sil_agg:.3f}")
 # 4. COMPARE ALL 3
 # ─────────────────────────────────────────────
 
-print("\n📊 Model Comparison:")
+print("\nModel Comparison:")
 print(f"{'Model':<20} {'Clusters':<10} {'Silhouette':<12} {'DB Index':<12}")
 print("-" * 55)
 print(f"{'K-Means':<20} {best_k:<10} {max(silhouettes):<12.3f} {db_scores[np.argmax(silhouettes)]:<12.3f}")
@@ -152,9 +179,9 @@ plt.suptitle('Clustering Results — UMAP Visualization', fontsize=14, fontweigh
 plt.tight_layout()
 plt.savefig('clustering_comparison.png', dpi=150, bbox_inches='tight')
 plt.close()
-print("\n✅ Saved: clustering_comparison.png")
+print("\n[OK] Saved: clustering_comparison.png")
 
 print("\n" + "=" * 60)
-print(f"  ✅ Step 3 Complete! Best model: K-Means (k={best_k})")
+print(f"  [SUCCESS] Step 3 Complete! Best model: K-Means (k={best_k})")
 print("  Saved: kmeans_model.pkl, hdbscan_model.pkl, all label files")
 print("=" * 60)

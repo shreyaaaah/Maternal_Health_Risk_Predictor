@@ -23,14 +23,14 @@ print("\n[1/5] Loading UCI Maternal Health Risk dataset...")
 maternal = fetch_ucirepo(id=863)
 df_maternal = maternal.data.features.copy()
 df_maternal['source'] = 'maternal'
-print(f"      ✅ Loaded: {df_maternal.shape[0]} rows, {df_maternal.shape[1]-1} features")
+print(f"      [OK] Loaded: {df_maternal.shape[0]} rows, {df_maternal.shape[1]-1} features")
 print(f"      Features: {list(df_maternal.columns[:-1])}")
 
 print("\n[2/5] Loading UCI CTG (Cardiotocography) dataset...")
 ctg = fetch_ucirepo(id=193)
 df_ctg = ctg.data.features.copy()
 df_ctg['source'] = 'ctg'
-print(f"      ✅ Loaded: {df_ctg.shape[0]} rows, {df_ctg.shape[1]-1} features")
+print(f"      [OK] Loaded: {df_ctg.shape[0]} rows, {df_ctg.shape[1]-1} features")
 print(f"      Features: {list(df_ctg.columns[:10])}... (21 total)")
 
 # ─────────────────────────────────────────────
@@ -115,35 +115,56 @@ df_ctg_aligned = df_ctg[all_features + ['source']]
 
 df_combined = pd.concat([df_maternal_aligned, df_ctg_aligned], axis=0, ignore_index=True)
 
-print(f"      ✅ Combined dataset: {df_combined.shape[0]} rows, {len(all_features)} features")
+print(f"      [OK] Combined dataset: {df_combined.shape[0]} rows, {len(all_features)} features")
 print(f"         Maternal records : {len(df_maternal_aligned)}")
 print(f"         CTG records      : {len(df_ctg_aligned)}")
 
 # ─────────────────────────────────────────────
-# 4. HANDLE MISSING VALUES
+# 4. FEATURE ENGINEERING & OUTLIER HANDLING
 # ─────────────────────────────────────────────
 
-print("\n[4/5] Handling missing values...")
+print("\n[4/5] Preprocessing & Feature Engineering...")
 
-X = df_combined[all_features].copy()
+# Feature Engineering: Pulse Pressure (Maternal only, but we'll compute where possible)
+df_combined['pulse_pressure'] = df_combined['systolic_bp'] - df_combined['diastolic_bp']
+all_features.append('pulse_pressure')
 
-# Fill NaN with column median (safe for skewed data)
-from sklearn.impute import SimpleImputer
-imputer = SimpleImputer(strategy='median')
-X_imputed = pd.DataFrame(imputer.fit_transform(X), columns=all_features)
+# Handle Outliers via Winsorization (Clip at 1st and 99th percentiles)
+for col in all_features:
+    if df_combined[col].notnull().any():
+        lower = df_combined[col].quantile(0.01)
+        upper = df_combined[col].quantile(0.99)
+        df_combined[col] = df_combined[col].clip(lower, upper)
 
-missing_before = df_combined[all_features].isnull().sum().sum()
-print(f"      Missing values before imputation: {missing_before}")
-print(f"      Missing values after imputation : {X_imputed.isnull().sum().sum()}")
+# Source-Aware Imputation
+# We fill missing values with the median of their respective source if available, 
+# otherwise use the global median.
+for source_val in ['maternal', 'ctg']:
+    mask = df_combined['source'] == source_val
+    source_df = df_combined[mask]
+    for col in all_features:
+        if df_combined.loc[mask, col].isnull().all():
+            # If the entire source is missing this column (e.g. maternal missing fetal_movement)
+            # fill with the global median of the OTHER source
+            df_combined.loc[mask, col] = df_combined[col].median()
+        else:
+            # Fill with source-specific median
+            df_combined.loc[mask, col] = df_combined.loc[mask, col].fillna(source_df[col].median())
+
+# Final check for any remaining NaNs
+df_combined[all_features] = df_combined[all_features].fillna(df_combined[all_features].median())
+
+X_imputed = df_combined[all_features].copy()
 
 # ─────────────────────────────────────────────
-# 5. SCALE FEATURES
+# 5. SCALE FEATURES (RobustScaler)
 # ─────────────────────────────────────────────
 
-print("\n[5/5] Scaling features (StandardScaler)...")
-scaler = StandardScaler()
+from sklearn.preprocessing import RobustScaler
+print("\n[5/5] Scaling features (RobustScaler)...")
+scaler = RobustScaler()
 X_scaled = pd.DataFrame(scaler.fit_transform(X_imputed), columns=all_features)
-print(f"      ✅ Scaling complete. Shape: {X_scaled.shape}")
+print(f"      [OK] Scaling complete. Shape: {X_scaled.shape}")
 
 # Save processed data
 df_combined['source'].to_csv('source_labels.csv', index=False)
@@ -151,11 +172,14 @@ X_scaled.to_csv('X_scaled.csv', index=False)
 X_imputed.to_csv('X_raw.csv', index=False)
 
 import pickle
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(strategy='median')
+imputer.fit(X_imputed)
 pickle.dump(scaler, open('scaler.pkl', 'wb'))
 pickle.dump(imputer, open('imputer.pkl', 'wb'))
 
 print("\n" + "=" * 60)
-print("  ✅ Step 1 Complete!")
+print("  [SUCCESS] Step 1 Complete!")
 print("  Saved: X_scaled.csv, X_raw.csv, scaler.pkl, imputer.pkl")
 print("=" * 60)
 
