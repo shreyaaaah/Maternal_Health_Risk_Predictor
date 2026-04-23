@@ -15,23 +15,44 @@ print("  MATERNAL HEALTH CLUSTERING SYSTEM")
 print("  Step 1: Data Collection & Fusion")
 print("=" * 60)
 
+import os
+import time
+
 # ─────────────────────────────────────────────
 # 1. LOAD DATASETS
 # ─────────────────────────────────────────────
 
-print("\n[1/5] Loading UCI Maternal Health Risk dataset...")
-maternal = fetch_ucirepo(id=863)
-df_maternal = maternal.data.features.copy()
-df_maternal['source'] = 'maternal'
-print(f"      [OK] Loaded: {df_maternal.shape[0]} rows, {df_maternal.shape[1]-1} features")
-print(f"      Features: {list(df_maternal.columns[:-1])}")
+print("\n[1/5] Loading datasets...")
 
-print("\n[2/5] Loading UCI CTG (Cardiotocography) dataset...")
-ctg = fetch_ucirepo(id=193)
-df_ctg = ctg.data.features.copy()
+# Load Maternal dataset (Local is preferred as it's the full 1014 records)
+if os.path.exists("Maternal Health Risk Data Set.csv"):
+    df_maternal = pd.read_csv("Maternal Health Risk Data Set.csv")
+    print(f"      [OK] Loaded Maternal dataset from local CSV")
+else:
+    print("      Fetching Maternal dataset from UCI...")
+    maternal = fetch_ucirepo(id=863)
+    df_maternal = maternal.data.features.copy()
+
+df_maternal['source'] = 'maternal'
+
+# Load CTG dataset (Requires UCI fetch as local CTG.csv is just metadata)
+df_ctg = None
+for attempt in range(3):
+    try:
+        print(f"      Fetching CTG dataset from UCI (Attempt {attempt+1})...")
+        ctg = fetch_ucirepo(id=193)
+        df_ctg = ctg.data.features.copy()
+        print(f"      [OK] Loaded: {df_ctg.shape[0]} rows")
+        break
+    except Exception as e:
+        print(f"      [!] Fetch failed: {e}")
+        time.sleep(2)
+
+if df_ctg is None:
+    print("      [!] Could not fetch CTG. Using Maternal data only for this run.")
+    df_ctg = pd.DataFrame(columns=df_maternal.columns)
+
 df_ctg['source'] = 'ctg'
-print(f"      [OK] Loaded: {df_ctg.shape[0]} rows, {df_ctg.shape[1]-1} features")
-print(f"      Features: {list(df_ctg.columns[:10])}... (21 total)")
 
 # ─────────────────────────────────────────────
 # 2. FEATURE ALIGNMENT STRATEGY
@@ -120,51 +141,53 @@ print(f"         Maternal records : {len(df_maternal_aligned)}")
 print(f"         CTG records      : {len(df_ctg_aligned)}")
 
 # ─────────────────────────────────────────────
-# 4. FEATURE ENGINEERING & OUTLIER HANDLING
+# 4. STABLE SOURCE-AWARE IMPUTATION
 # ─────────────────────────────────────────────
 
-print("\n[4/5] Preprocessing & Feature Engineering...")
+print("\n[4/5] Stable Imputation & Feature Engineering...")
 
-# Feature Engineering: Pulse Pressure (Maternal only, but we'll compute where possible)
 df_combined['pulse_pressure'] = df_combined['systolic_bp'] - df_combined['diastolic_bp']
-all_features.append('pulse_pressure')
+if 'pulse_pressure' not in all_features: all_features.append('pulse_pressure')
 
-# Handle Outliers via Winsorization (Clip at 1st and 99th percentiles)
-for col in all_features:
-    if df_combined[col].notnull().any():
-        lower = df_combined[col].quantile(0.01)
-        upper = df_combined[col].quantile(0.99)
-        df_combined[col] = df_combined[col].clip(lower, upper)
-
-# Source-Aware Imputation
-# We fill missing values with the median of their respective source if available, 
-# otherwise use the global median.
+# Source-Aware Imputation (Stable)
 for source_val in ['maternal', 'ctg']:
     mask = df_combined['source'] == source_val
-    source_df = df_combined[mask]
     for col in all_features:
         if df_combined.loc[mask, col].isnull().all():
-            # If the entire source is missing this column (e.g. maternal missing fetal_movement)
-            # fill with the global median of the OTHER source
+            # Fill with global median if entirely missing from source
             df_combined.loc[mask, col] = df_combined[col].median()
         else:
-            # Fill with source-specific median
-            df_combined.loc[mask, col] = df_combined.loc[mask, col].fillna(source_df[col].median())
+            df_combined.loc[mask, col] = df_combined.loc[mask, col].fillna(df_combined.loc[mask, col].median())
 
-# Final check for any remaining NaNs
+# Final fallback
 df_combined[all_features] = df_combined[all_features].fillna(df_combined[all_features].median())
-
 X_imputed = df_combined[all_features].copy()
 
 # ─────────────────────────────────────────────
-# 5. SCALE FEATURES (RobustScaler)
+# 5. SCALE & FEATURE WEIGHTING
 # ─────────────────────────────────────────────
 
-from sklearn.preprocessing import RobustScaler
-print("\n[5/5] Scaling features (RobustScaler)...")
-scaler = RobustScaler()
+from sklearn.preprocessing import StandardScaler
+print("\n[5/5] Scaling & Feature Weighting...")
+
+scaler = StandardScaler()
 X_scaled = pd.DataFrame(scaler.fit_transform(X_imputed), columns=all_features)
-print(f"      [OK] Scaling complete. Shape: {X_scaled.shape}")
+
+# UNSUPERVISED TRICK: Weight critical risk features higher
+# This tells K-Means: "These features matter more for patient similarity"
+risk_weights = {
+    'systolic_bp': 2.0,
+    'blood_sugar': 2.0,
+    'heart_rate': 1.5,
+    'pct_abnormal_stv': 2.0,
+    'fhr_baseline': 1.5
+}
+
+for feat, weight in risk_weights.items():
+    if feat in X_scaled.columns:
+        X_scaled[feat] = X_scaled[feat] * weight
+
+print(f"      [OK] Preprocessing complete. Shape: {X_scaled.shape}")
 
 # Save processed data
 df_combined['source'].to_csv('source_labels.csv', index=False)

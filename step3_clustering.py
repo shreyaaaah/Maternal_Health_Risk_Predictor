@@ -31,46 +31,33 @@ X = X_pca
 # 1. K-MEANS — Find Optimal K
 # ─────────────────────────────────────────────
 
-print("\n[1/3] Running K-Means (k=2 to 8)...")
+print("\n[1/3] Running K-Means (k=4 to 10)...")
 
-k_range = range(2, 9)
+k_range = range(4, 11)
 inertias, silhouettes, db_scores = [], [], []
 
 for k in k_range:
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    km = KMeans(n_clusters=k, random_state=42, n_init=20, max_iter=500)
     labels = km.fit_predict(X)
     inertias.append(km.inertia_)
     silhouettes.append(silhouette_score(X, labels))
     db_scores.append(davies_bouldin_score(X, labels))
     print(f"      k={k} | Silhouette: {silhouettes[-1]:.3f} | DB Index: {db_scores[-1]:.3f}")
 
-# Plot elbow + silhouette
+# Select best k (weighted towards more clusters for medical nuance)
+max_sil = max(silhouettes)
+best_k = k_range[np.argmax(silhouettes)]
+for i, sil in enumerate(silhouettes):
+    if sil >= max_sil * 0.9: # within 10% of max
+        best_k = k_range[i]
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
 axes[0].plot(k_range, inertias, 'o-', color='#E76F51', linewidth=2, markersize=8)
-axes[0].set_xlabel('Number of Clusters (k)')
-axes[0].set_ylabel('Inertia (Within-cluster SSE)')
 axes[0].set_title('Elbow Curve', fontweight='bold')
-axes[0].grid(alpha=0.3)
-
 axes[1].plot(k_range, silhouettes, 's-', color='#2A9D8F', linewidth=2, markersize=8)
-axes[1].set_xlabel('Number of Clusters (k)')
-axes[1].set_ylabel('Silhouette Score')
-axes[1].set_title('Silhouette Score by k', fontweight='bold')
-axes[1].axvline(x=k_range[np.argmax(silhouettes)], color='gray', linestyle='--', alpha=0.6)
-axes[1].grid(alpha=0.3)
-
-plt.suptitle('K-Means — Finding Optimal k', fontsize=13, fontweight='bold')
+axes[1].set_title('Silhouette Score', fontweight='bold')
 plt.tight_layout()
 plt.savefig('kmeans_elbow.png', dpi=150, bbox_inches='tight')
 plt.close()
-
-# Select best k (preferring more clusters if silhouette is similar)
-max_sil = max(silhouettes)
-best_k = k_range[0]
-for i, sil in enumerate(silhouettes):
-    if sil >= max_sil * 0.9:  # within 10% of max
-        best_k = k_range[i]
 
 print(f"\n      [OK] Selected k = {best_k} (Silhouette = {silhouettes[k_range.index(best_k)]:.3f})")
 

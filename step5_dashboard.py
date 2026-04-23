@@ -138,7 +138,6 @@ ALL_FEATURES = ['age', 'systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_temp'
                 'histogram_tendency', 'pulse_pressure']
 
 def predict_cluster(vitals_dict):
-    # Calculate pulse pressure
     vitals_dict['pulse_pressure'] = vitals_dict.get('systolic_bp', 120) - vitals_dict.get('diastolic_bp', 80)
     
     row = pd.DataFrame([{feat: vitals_dict.get(feat, np.nan) for feat in ALL_FEATURES}])
@@ -146,6 +145,7 @@ def predict_cluster(vitals_dict):
     row_scaled = scaler.transform(row_imputed)
     row_pca = pca.transform(row_scaled)
     cluster = kmeans.predict(row_pca)[0]
+    
     cluster_name = cluster_names.get(str(cluster), cluster_names.get(cluster, "Unknown"))
     return int(cluster), cluster_name
 

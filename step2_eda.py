@@ -99,8 +99,9 @@ plt.close()
 print(f"      [OK] {n_components_95} components explain 95% variance")
 print("      [OK] Saved: pca_analysis.png")
 
-# PCA transform for clustering
-pca_final = PCA(n_components=n_components_95)
+# PCA transform for clustering (preserving more components for nuance)
+n_comp = min(8, X_scaled.shape[1])
+pca_final = PCA(n_components=n_comp)
 X_pca = pca_final.fit_transform(X_scaled)
 
 import pickle
