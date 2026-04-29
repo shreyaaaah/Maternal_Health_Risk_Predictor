@@ -6,9 +6,9 @@
 ## 📌 Project Summary
 A real-time unsupervised clustering system that discovers hidden maternal
 health risk profiles by combining two UCI datasets:
-- UCI Maternal Health Risk (1,014 records, 6 features)
-- UCI CTG Cardiotocography (2,126 records, 21 features)
-**Total: ~3,140 patients, 27 features — zero labels used during training**
+- UCI Maternal Health Risk (1,014 records)
+- UCI CTG Cardiotocography (2,126 records)
+**Total after Data Fusion and Augmentation: 10,000 patients — zero labels used during training**
 
 ---
 
@@ -17,13 +17,13 @@ health risk profiles by combining two UCI datasets:
 ```
 maternal_health_clustering/
 │
-├── step1_data_fusion.py      # Load + merge + preprocess both datasets
-├── step2_eda.py              # EDA, PCA, UMAP visualization
-├── step3_clustering.py       # K-Means + HDBSCAN + Agglomerative
-├── step4_profiling.py        # Cluster naming & interpretation
-├── step5_dashboard.py        # Real-time Streamlit dashboard
-├── requirements.txt          # All dependencies
-└── README.md                 # This file
+├── step1_data_fusion.py          # Load, merge, apply CTG-transformation, augment to 10K
+├── step2_eda.py                  # Exploratory Data Analysis & PCA
+├── step3_clustering.py           # K-Means, DBSCAN, and Agglomerative Clustering
+├── step4_cluster_profiling.py    # Cluster interpretation & clinical risk scoring
+├── step5_dashboard.py            # Real-time Streamlit dashboard
+├── requirements.txt              # All dependencies
+└── README.md                     # This file
 ```
 
 ---
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 python step1_data_fusion.py
 python step2_eda.py
 python step3_clustering.py
-python step4_profiling.py
+python step4_cluster_profiling.py
 
 # 3. Launch real-time dashboard
 streamlit run step5_dashboard.py
@@ -51,10 +51,10 @@ streamlit run step5_dashboard.py
 | Days  | Step  | Task                                      |
 |-------|-------|-------------------------------------------|
 | 1–2   | Setup | Install deps, understand datasets         |
-| 3–5   | Step 1| Data fusion, feature alignment, scaling   |
-| 6–7   | Step 2| EDA, correlation heatmap, PCA, UMAP       |
-| 8–13  | Step 3| Clustering — tune K-Means, HDBSCAN, Agg  |
-| 14–15 | Step 4| Profile & name clusters                   |
+| 3–5   | Step 1| Data fusion, CTG transformation, scaling & 10K Augmentation |
+| 6–7   | Step 2| EDA, correlation heatmaps, PCA            |
+| 8–13  | Step 3| Clustering — tune K-Means, DBSCAN, Agg    |
+| 14–15 | Step 4| Clinical risk scoring & cluster profiling |
 | 16–17 | Step 5| Build real-time prediction engine         |
 | 18–19 | Step 5| Build Streamlit dashboard                 |
 | 20    | Final | Test, polish, write report                |
@@ -66,11 +66,10 @@ streamlit run step5_dashboard.py
 | Algorithm        | Purpose                              |
 |------------------|--------------------------------------|
 | K-Means          | Primary clustering (fast, tunable)   |
-| HDBSCAN          | Density-based (finds irregular shapes)|
+| DBSCAN           | Density-based (finds irregular shapes)|
 | Agglomerative    | Hierarchical clustering (comparison) |
-| PCA              | Dimensionality reduction pre-cluster |
-| UMAP             | 2D visualization of clusters         |
-| SimpleImputer    | Handle missing values across datasets|
+| PCA              | Dimensionality reduction & 2D Viz    |
+| SimpleImputer    | Handle missing values                |
 | StandardScaler   | Normalize all features               |
 
 ---
@@ -79,14 +78,13 @@ streamlit run step5_dashboard.py
 - **Silhouette Score** — measures cluster compactness & separation
 - **Davies-Bouldin Index** — lower = better separated clusters
 - **Calinski-Harabasz Score** — higher = denser, well-separated clusters
-- **ARI (optional)** — compare discovered clusters vs dropped labels
 
 ---
 
 ## ⚠️ Important Notes
 1. The `RiskLevel` (Maternal) and `NSP` (CTG) columns are DROPPED before
    any clustering — this is a purely unsupervised system.
-2. Labels are only used optionally at the end for validation (ARI score).
+2. Clinical thresholds are used only in the final profiling step to give medical interpretability to the found clusters.
 3. This is an academic/research project — not a clinical decision tool.
 
 ---
