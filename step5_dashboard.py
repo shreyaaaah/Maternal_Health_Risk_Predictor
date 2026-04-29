@@ -12,70 +12,78 @@ st.set_page_config(
 )
 
 # -----------------------------
-# BEAUTIFUL RESPONSIVE CSS
+# THEME TOGGLE
 # -----------------------------
-st.markdown("""
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Light"
+
+theme_choice = st.sidebar.radio(
+    "🎨 Theme Mode",
+    ["Light", "Dark"],
+    index=0 if st.session_state.theme_mode == "Light" else 1
+)
+
+st.session_state.theme_mode = theme_choice
+
+if st.session_state.theme_mode == "Dark":
+    bg = "linear-gradient(135deg, #070b16 0%, #0f172a 45%, #1a1020 100%)"
+    text = "#ffffff"
+    card_bg = "rgba(15, 23, 42, 0.78)"
+    plot_template = "plotly_dark"
+    sidebar_border = "rgba(255,255,255,0.10)"
+    info_bg = "#111827"
+else:
+    bg = "linear-gradient(135deg, #f6f8ff 0%, #eef3ff 45%, #fff7fb 100%)"
+    text = "#101828"
+    card_bg = "rgba(255,255,255,0.78)"
+    plot_template = "plotly_white"
+    sidebar_border = "rgba(120,120,160,0.18)"
+    info_bg = "#ffffff"
+
+# -----------------------------
+# CSS
+# -----------------------------
+st.markdown(f"""
 <style>
-/* ---------- GLOBAL ---------- */
-.stApp {
-    background: linear-gradient(135deg, #f6f8ff 0%, #eef3ff 45%, #fff7fb 100%);
-    color: #101828;
-}
+.stApp {{
+    background: {bg};
+    color: {text};
+}}
 
-/* Dark mode auto support */
-@media (prefers-color-scheme: dark) {
-    .stApp {
-        background: linear-gradient(135deg, #070b16 0%, #0f172a 45%, #1a1020 100%);
-        color: #ffffff;
-    }
-}
-
-/* ---------- MAIN CONTAINER ---------- */
-.block-container {
+.block-container {{
     padding-top: 3rem;
     padding-bottom: 3rem;
     max-width: 1300px;
-}
+}}
 
-/* ---------- HEADINGS ---------- */
-h1 {
+h1 {{
     font-size: 3rem !important;
     font-weight: 900 !important;
     letter-spacing: -1px;
     background: linear-gradient(90deg, #4f46e5, #ec4899, #06b6d4);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-}
+}}
 
-h2, h3 {
+h2, h3 {{
     font-weight: 800 !important;
-}
+}}
 
-/* ---------- SIDEBAR ---------- */
-section[data-testid="stSidebar"] {
-    background: rgba(255, 255, 255, 0.82);
+section[data-testid="stSidebar"] {{
+    background: {card_bg};
     backdrop-filter: blur(18px);
-    border-right: 1px solid rgba(120, 120, 160, 0.18);
-}
+    border-right: 1px solid {sidebar_border};
+}}
 
-@media (prefers-color-scheme: dark) {
-    section[data-testid="stSidebar"] {
-        background: rgba(15, 23, 42, 0.86);
-        border-right: 1px solid rgba(255, 255, 255, 0.10);
-    }
-}
-
-/* ---------- INPUTS ---------- */
 div[data-baseweb="input"] > div,
 div[data-baseweb="select"] > div,
-.stNumberInput input {
+.stNumberInput input {{
     border-radius: 14px !important;
     border: 1px solid rgba(99, 102, 241, 0.25) !important;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-}
+}}
 
-/* ---------- BUTTON ---------- */
-.stButton > button {
+.stButton > button {{
     border-radius: 14px !important;
     background: linear-gradient(135deg, #ef4444, #ec4899) !important;
     color: white !important;
@@ -84,15 +92,14 @@ div[data-baseweb="select"] > div,
     padding: 0.7rem 1rem !important;
     box-shadow: 0 12px 30px rgba(236, 72, 153, 0.35);
     transition: all 0.25s ease;
-}
+}}
 
-.stButton > button:hover {
+.stButton > button:hover {{
     transform: translateY(-2px);
     box-shadow: 0 16px 40px rgba(236, 72, 153, 0.45);
-}
+}}
 
-/* ---------- RISK BOX ---------- */
-.risk-box {
+.risk-box {{
     padding: 34px;
     border-radius: 26px;
     text-align: center;
@@ -102,78 +109,57 @@ div[data-baseweb="select"] > div,
     margin: 14px 0 24px 0;
     box-shadow: 0 25px 60px rgba(0,0,0,0.18);
     animation: fadeUp 0.7s ease both;
-}
+}}
 
-.low {
+.low {{
     background: linear-gradient(135deg, #dcfce7, #22c55e);
     border: 2px solid #16a34a;
     color: #052e16;
-}
+}}
 
-.medium {
+.medium {{
     background: linear-gradient(135deg, #fef3c7, #f59e0b);
     border: 2px solid #d97706;
     color: #3b2500;
-}
+}}
 
-.high {
+.high {{
     background: linear-gradient(135deg, #fee2e2, #ef4444);
     border: 2px solid #dc2626;
     color: #450a0a;
-}
+}}
 
-@media (prefers-color-scheme: dark) {
-    .low {
-        background: linear-gradient(135deg, #052e16, #15803d);
-        color: #dcfce7;
-    }
-
-    .medium {
-        background: linear-gradient(135deg, #422006, #b45309);
-        color: #fef3c7;
-    }
-
-    .high {
-        background: linear-gradient(135deg, #450a0a, #b91c1c);
-        color: #fee2e2;
-    }
-}
-
-/* ---------- PLOT CONTAINER ---------- */
-[data-testid="stPlotlyChart"] {
-    background: rgba(255, 255, 255, 0.68);
+[data-testid="stPlotlyChart"] {{
+    background: {card_bg};
     border-radius: 24px;
     padding: 14px;
     box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
-}
+}}
 
-@media (prefers-color-scheme: dark) {
-    [data-testid="stPlotlyChart"] {
-        background: rgba(15, 23, 42, 0.68);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-    }
-}
-
-/* ---------- DATAFRAME ---------- */
-div[data-testid="stDataFrame"] {
+div[data-testid="stDataFrame"] {{
     border-radius: 18px !important;
     box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
-}
+}}
 
-/* ---------- ANIMATION ---------- */
-@keyframes fadeUp {
-    from {
+[data-testid="stMetric"] {{
+    background: {card_bg};
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+}}
+
+@keyframes fadeUp {{
+    from {{
         opacity: 0;
         transform: translateY(18px);
-    }
-    to {
+    }}
+    to {{
         opacity: 1;
         transform: translateY(0);
-    }
-}
+    }}
+}}
 </style>
 """, unsafe_allow_html=True)
-
 
 # -----------------------------
 # LOAD FILES
@@ -198,7 +184,6 @@ def load_data():
 
 scaler, pca, kmeans, FEATURES, cluster_names = load_artifacts()
 X_raw, X_pca, labels = load_data()
-
 
 # -----------------------------
 # PATIENT-SPECIFIC RISK LOGIC
@@ -263,7 +248,6 @@ def patient_risk_interpretation(v):
 def predict_cluster(vitals):
     row = pd.DataFrame([{feature: vitals.get(feature, np.nan) for feature in FEATURES}])
 
-    # Safer deployment fix: avoid imputer transform issue
     row = row.apply(pd.to_numeric, errors="coerce")
 
     for col in FEATURES:
@@ -301,7 +285,7 @@ st.markdown("""
 st.caption("Using K-Means, DBSCAN, Agglomerative Clustering, PCA, and patient-specific clinical scoring")
 
 # -----------------------------
-# SIDEBAR
+# SIDEBAR INPUTS
 # -----------------------------
 st.sidebar.header("👩 New Patient Assessment")
 
@@ -374,7 +358,6 @@ with col1:
             st.warning("⚠️ Recommended: regular monitoring and follow-up.")
         else:
             st.success("✅ Recommended: routine prenatal care.")
-
     else:
         st.info("Enter patient values and click **Assess Patient**.")
 
@@ -394,8 +377,8 @@ with col2:
         x="PCA1",
         y="PCA2",
         color="risk",
-        opacity=0.6,
-        template="plotly_dark",
+        opacity=0.65,
+        template=plot_template,
         title="KMeans Patient Clusters",
         color_discrete_map={
             "LOW RISK": "#22c55e",
@@ -409,7 +392,12 @@ with col2:
             x=[patient_pca[0, 0]],
             y=[patient_pca[0, 1]],
             mode="markers+text",
-            marker=dict(size=20, symbol="star", color="white", line=dict(width=2, color="black")),
+            marker=dict(
+                size=22,
+                symbol="star",
+                color="#ffffff" if st.session_state.theme_mode == "Dark" else "#111827",
+                line=dict(width=2, color="#ec4899")
+            ),
             text=[patient_id],
             textposition="top center",
             name="New Patient"
@@ -424,7 +412,7 @@ with col2:
     st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# STATS SECTION
+# STATS
 # -----------------------------
 st.divider()
 
@@ -442,7 +430,7 @@ with c3:
     st.metric("Primary Model", "KMeans")
 
 # -----------------------------
-# CLUSTER PROFILE TABLE
+# CLUSTER TABLE
 # -----------------------------
 st.subheader("📋 Cluster Profile Table")
 
