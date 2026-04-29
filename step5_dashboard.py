@@ -31,14 +31,16 @@ if st.session_state.theme_mode == "Dark":
     card_bg = "rgba(15, 23, 42, 0.78)"
     plot_template = "plotly_dark"
     sidebar_border = "rgba(255,255,255,0.10)"
-    info_bg = "#111827"
+    annotation_bg = "#111827"
+    annotation_text = "#ffffff"
 else:
     bg = "linear-gradient(135deg, #f6f8ff 0%, #eef3ff 45%, #fff7fb 100%)"
     text = "#101828"
     card_bg = "rgba(255,255,255,0.78)"
     plot_template = "plotly_white"
     sidebar_border = "rgba(120,120,160,0.18)"
-    info_bg = "#ffffff"
+    annotation_bg = "#ffffff"
+    annotation_text = "#111827"
 
 # -----------------------------
 # CSS
@@ -247,7 +249,6 @@ def patient_risk_interpretation(v):
 # -----------------------------
 def predict_cluster(vitals):
     row = pd.DataFrame([{feature: vitals.get(feature, np.nan) for feature in FEATURES}])
-
     row = row.apply(pd.to_numeric, errors="coerce")
 
     for col in FEATURES:
@@ -255,7 +256,6 @@ def predict_cluster(vitals):
             row.loc[0, col] = X_raw[col].median()
 
     row_values = row[FEATURES].values
-
     row_scaled = scaler.transform(row_values)
     row_pca = pca.transform(row_scaled)
 
@@ -388,23 +388,43 @@ with col2:
     )
 
     if submit:
+        patient_x = float(patient_pca[0, 0])
+        patient_y = float(patient_pca[0, 1])
+
         fig.add_scatter(
-            x=[patient_pca[0, 0]],
-            y=[patient_pca[0, 1]],
+            x=[patient_x],
+            y=[patient_y],
             mode="markers+text",
             marker=dict(
-                size=22,
+                size=30,
                 symbol="star",
-                color="#ffffff" if st.session_state.theme_mode == "Dark" else "#111827",
-                line=dict(width=2, color="#ec4899")
+                color="#ec4899",
+                line=dict(width=3, color="#111827")
             ),
-            text=[patient_id],
+            text=[f"📍 {patient_id}<br>{final_risk}"],
             textposition="top center",
-            name="New Patient"
+            textfont=dict(size=14, color=annotation_text),
+            name=f"New Patient: {patient_id}"
+        )
+
+        fig.add_annotation(
+            x=patient_x,
+            y=patient_y,
+            text=f"Patient belongs to<br><b>{final_risk}</b>",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            ax=70,
+            ay=-70,
+            bgcolor=annotation_bg,
+            bordercolor="#ec4899",
+            borderwidth=2,
+            font=dict(color=annotation_text, size=13)
         )
 
     fig.update_layout(
-        height=520,
+        height=540,
         margin=dict(l=20, r=20, t=60, b=20),
         legend_title_text="Risk Group"
     )
@@ -436,4 +456,3 @@ st.subheader("📋 Cluster Profile Table")
 
 profile = pd.read_csv("cluster_profile.csv")
 st.dataframe(profile, use_container_width=True)
-
