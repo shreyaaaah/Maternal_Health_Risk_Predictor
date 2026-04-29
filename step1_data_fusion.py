@@ -1,211 +1,171 @@
-"""
-STEP 1: Data Collection & Fusion
-Maternal Health Risk (UCI) + CTG Cardiotocography (UCI)
-"""
-
 import pandas as pd
 import numpy as np
+import pickle
+import os
 from ucimlrepo import fetch_ucirepo
 from sklearn.preprocessing import StandardScaler
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.impute import SimpleImputer
 
-print("=" * 60)
-print("  MATERNAL HEALTH CLUSTERING SYSTEM")
-print("  Step 1: Data Collection & Fusion")
-print("=" * 60)
+np.random.seed(42)
 
-import os
-import time
+print("=" * 70)
+print("STEP 1: DATA FUSION + 10K AUGMENTATION")
+print("=" * 70)
 
-# ─────────────────────────────────────────────
-# 1. LOAD DATASETS
-# ─────────────────────────────────────────────
+FEATURES = [
+    "age",
+    "systolic_bp",
+    "diastolic_bp",
+    "blood_sugar",
+    "body_temp",
+    "heart_rate"
+]
 
-print("\n[1/5] Loading datasets...")
-
-# Load Maternal dataset (Local is preferred as it's the full 1014 records)
+# -----------------------------
+# 1. LOAD MATERNAL DATASET
+# -----------------------------
 if os.path.exists("Maternal Health Risk Data Set.csv"):
     df_maternal = pd.read_csv("Maternal Health Risk Data Set.csv")
-    print(f"      [OK] Loaded Maternal dataset from local CSV")
 else:
-    print("      Fetching Maternal dataset from UCI...")
     maternal = fetch_ucirepo(id=863)
     df_maternal = maternal.data.features.copy()
 
-df_maternal['source'] = 'maternal'
-
-# Load CTG dataset (Requires UCI fetch as local CTG.csv is just metadata)
-df_ctg = None
-for attempt in range(3):
-    try:
-        print(f"      Fetching CTG dataset from UCI (Attempt {attempt+1})...")
-        ctg = fetch_ucirepo(id=193)
-        df_ctg = ctg.data.features.copy()
-        print(f"      [OK] Loaded: {df_ctg.shape[0]} rows")
-        break
-    except Exception as e:
-        print(f"      [!] Fetch failed: {e}")
-        time.sleep(2)
-
-if df_ctg is None:
-    print("      [!] Could not fetch CTG. Using Maternal data only for this run.")
-    df_ctg = pd.DataFrame(columns=df_maternal.columns)
-
-df_ctg['source'] = 'ctg'
-
-# ─────────────────────────────────────────────
-# 2. FEATURE ALIGNMENT STRATEGY
-# ─────────────────────────────────────────────
-
-print("\n[3/5] Aligning features across datasets...")
-
-# Maternal features: Age, SystolicBP, DiastolicBP, BS (Blood Sugar), BodyTemp, HeartRate
-# CTG features: LB (baseline FHR), AC, FM, UC, ASTV, MSTV, ALTV, MLTV, DL, DS, DP,
-#               Width, Min, Max, Nmax, Nzeros, Mode, Mean, Median, Variance, Tendency
-
-# Rename maternal columns for clarity
 df_maternal = df_maternal.rename(columns={
-    'Age': 'age',
-    'SystolicBP': 'systolic_bp',
-    'DiastolicBP': 'diastolic_bp',
-    'BS': 'blood_sugar',
-    'BodyTemp': 'body_temp',
-    'HeartRate': 'heart_rate'
+    "Age": "age",
+    "SystolicBP": "systolic_bp",
+    "DiastolicBP": "diastolic_bp",
+    "BS": "blood_sugar",
+    "BodyTemp": "body_temp",
+    "HeartRate": "heart_rate"
 })
 
-# Rename CTG columns for clarity
+df_maternal = df_maternal[FEATURES].copy()
+df_maternal["source"] = "maternal_real"
+
+print(f"Maternal dataset loaded: {df_maternal.shape}")
+
+# -----------------------------
+# 2. LOAD CTG DATASET
+# -----------------------------
+ctg = fetch_ucirepo(id=193)
+df_ctg = ctg.data.features.copy()
+
 df_ctg = df_ctg.rename(columns={
-    'LB': 'fhr_baseline',       # Fetal Heart Rate baseline
-    'AC': 'accelerations',      # Accelerations per second
-    'FM': 'fetal_movement',     # Fetal movements per second
-    'UC': 'uterine_contractions', # Uterine contractions per second
-    'ASTV': 'pct_abnormal_stv', # % time with abnormal short-term variability
-    'MSTV': 'mean_stv',         # Mean short-term variability
-    'ALTV': 'pct_abnormal_ltv', # % time with abnormal long-term variability
-    'MLTV': 'mean_ltv',         # Mean long-term variability
-    'DL': 'light_decelerations',
-    'DS': 'severe_decelerations',
-    'DP': 'prolonged_decelerations',
-    'Width': 'histogram_width',
-    'Min': 'histogram_min',
-    'Max': 'histogram_max',
-    'Nmax': 'histogram_peaks',
-    'Nzeros': 'histogram_zeros',
-    'Mode': 'histogram_mode',
-    'Mean': 'histogram_mean',
-    'Median': 'histogram_median',
-    'Variance': 'histogram_variance',
-    'Tendency': 'histogram_tendency'
+    "LB": "fhr_baseline",
+    "AC": "accelerations",
+    "FM": "fetal_movement",
+    "UC": "uterine_contractions",
+    "ASTV": "abnormal_stv",
+    "ALTV": "abnormal_ltv"
 })
 
-# Build unified feature space:
-# Common: heart_rate (mother vs fetal baseline), basic vitals
-# Strategy: Use ALL features, fill missing with NaN, then impute
+print(f"CTG dataset loaded: {df_ctg.shape}")
 
-# Maternal → pad missing CTG features with NaN
-ctg_only_cols = ['fhr_baseline', 'accelerations', 'fetal_movement',
-                 'uterine_contractions', 'pct_abnormal_stv', 'mean_stv',
-                 'pct_abnormal_ltv', 'mean_ltv', 'light_decelerations',
-                 'severe_decelerations', 'prolonged_decelerations',
-                 'histogram_width', 'histogram_min', 'histogram_max',
-                 'histogram_peaks', 'histogram_zeros', 'histogram_mode',
-                 'histogram_mean', 'histogram_median', 'histogram_variance',
-                 'histogram_tendency']
+# -----------------------------
+# 3. TRANSFORM CTG INTO MATERNAL-LIKE FEATURE SPACE
+# -----------------------------
+n = len(df_ctg)
 
-maternal_only_cols = ['age', 'systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_temp']
+df_ctg_transformed = pd.DataFrame()
 
-# Add missing columns as NaN
-for col in ctg_only_cols:
-    df_maternal[col] = np.nan
+# Age generated realistically
+df_ctg_transformed["age"] = np.random.normal(28, 6, n).round()
+df_ctg_transformed["age"] = df_ctg_transformed["age"].clip(18, 45)
 
-for col in maternal_only_cols:
-    df_ctg[col] = np.nan
+# CTG stress indicators
+uc = df_ctg["uterine_contractions"].fillna(df_ctg["uterine_contractions"].median())
+astv = df_ctg["abnormal_stv"].fillna(df_ctg["abnormal_stv"].median())
+altv = df_ctg["abnormal_ltv"].fillna(df_ctg["abnormal_ltv"].median())
+fhr = df_ctg["fhr_baseline"].fillna(df_ctg["fhr_baseline"].median())
 
-# Map CTG heart rate to common column
-df_ctg['heart_rate'] = df_ctg['fhr_baseline']
+# Convert CTG stress into maternal-equivalent physiological proxies
+stress_score = (
+    (uc - uc.min()) / (uc.max() - uc.min() + 1e-8) * 0.4 +
+    (astv - astv.min()) / (astv.max() - astv.min() + 1e-8) * 0.4 +
+    (altv - altv.min()) / (altv.max() - altv.min() + 1e-8) * 0.2
+)
 
-# ─────────────────────────────────────────────
-# 3. MERGE DATASETS
-# ─────────────────────────────────────────────
+df_ctg_transformed["systolic_bp"] = 105 + stress_score * 45 + np.random.normal(0, 6, n)
+df_ctg_transformed["diastolic_bp"] = 65 + stress_score * 25 + np.random.normal(0, 4, n)
+df_ctg_transformed["blood_sugar"] = 5.8 + stress_score * 4 + np.random.normal(0, 0.4, n)
+df_ctg_transformed["body_temp"] = 98.2 + stress_score * 3 + np.random.normal(0, 0.3, n)
 
-all_features = maternal_only_cols + ['heart_rate'] + ctg_only_cols
+# DO NOT directly use fetal HR as maternal HR.
+# Convert fetal stress into maternal HR proxy.
+df_ctg_transformed["heart_rate"] = 72 + stress_score * 30 + np.random.normal(0, 7, n)
 
-df_maternal_aligned = df_maternal[all_features + ['source']]
-df_ctg_aligned = df_ctg[all_features + ['source']]
+df_ctg_transformed["source"] = "ctg_transformed"
 
-df_combined = pd.concat([df_maternal_aligned, df_ctg_aligned], axis=0, ignore_index=True)
+# Clinical clipping
+df_ctg_transformed["age"] = df_ctg_transformed["age"].clip(10, 60)
+df_ctg_transformed["systolic_bp"] = df_ctg_transformed["systolic_bp"].clip(70, 180)
+df_ctg_transformed["diastolic_bp"] = df_ctg_transformed["diastolic_bp"].clip(45, 120)
+df_ctg_transformed["blood_sugar"] = df_ctg_transformed["blood_sugar"].clip(4, 20)
+df_ctg_transformed["body_temp"] = df_ctg_transformed["body_temp"].clip(95, 105)
+df_ctg_transformed["heart_rate"] = df_ctg_transformed["heart_rate"].clip(45, 150)
 
-print(f"      [OK] Combined dataset: {df_combined.shape[0]} rows, {len(all_features)} features")
-print(f"         Maternal records : {len(df_maternal_aligned)}")
-print(f"         CTG records      : {len(df_ctg_aligned)}")
+print(f"CTG transformed dataset: {df_ctg_transformed.shape}")
 
-# ─────────────────────────────────────────────
-# 4. STABLE SOURCE-AWARE IMPUTATION
-# ─────────────────────────────────────────────
+# -----------------------------
+# 4. COMBINE
+# -----------------------------
+df_combined = pd.concat([df_maternal, df_ctg_transformed], ignore_index=True)
 
-print("\n[4/5] Stable Imputation & Feature Engineering...")
+print(f"Combined before augmentation: {df_combined.shape}")
 
-df_combined['pulse_pressure'] = df_combined['systolic_bp'] - df_combined['diastolic_bp']
-if 'pulse_pressure' not in all_features: all_features.append('pulse_pressure')
+# -----------------------------
+# 5. AUGMENT TO 10K ROWS
+# -----------------------------
+df_aug = df_combined.sample(n=10000, replace=True, random_state=42).reset_index(drop=True)
 
-# Source-Aware Imputation (Stable)
-for source_val in ['maternal', 'ctg']:
-    mask = df_combined['source'] == source_val
-    for col in all_features:
-        if df_combined.loc[mask, col].isnull().all():
-            # Fill with global median if entirely missing from source
-            df_combined.loc[mask, col] = df_combined[col].median()
-        else:
-            df_combined.loc[mask, col] = df_combined.loc[mask, col].fillna(df_combined.loc[mask, col].median())
-
-# Final fallback
-df_combined[all_features] = df_combined[all_features].fillna(df_combined[all_features].median())
-X_imputed = df_combined[all_features].copy()
-
-# ─────────────────────────────────────────────
-# 5. SCALE & FEATURE WEIGHTING
-# ─────────────────────────────────────────────
-
-from sklearn.preprocessing import StandardScaler
-print("\n[5/5] Scaling & Feature Weighting...")
-
-scaler = StandardScaler()
-X_scaled = pd.DataFrame(scaler.fit_transform(X_imputed), columns=all_features)
-
-# UNSUPERVISED TRICK: Weight critical risk features higher
-# This tells K-Means: "These features matter more for patient similarity"
-risk_weights = {
-    'systolic_bp': 2.0,
-    'blood_sugar': 2.0,
-    'heart_rate': 1.5,
-    'pct_abnormal_stv': 2.0,
-    'fhr_baseline': 1.5
+noise_config = {
+    "age": 1.5,
+    "systolic_bp": 3.5,
+    "diastolic_bp": 2.5,
+    "blood_sugar": 0.25,
+    "body_temp": 0.15,
+    "heart_rate": 3.0
 }
 
-for feat, weight in risk_weights.items():
-    if feat in X_scaled.columns:
-        X_scaled[feat] = X_scaled[feat] * weight
+for col, noise in noise_config.items():
+    df_aug[col] = df_aug[col] + np.random.normal(0, noise, len(df_aug))
 
-print(f"      [OK] Preprocessing complete. Shape: {X_scaled.shape}")
+df_aug["age"] = df_aug["age"].round().clip(10, 60)
+df_aug["systolic_bp"] = df_aug["systolic_bp"].clip(70, 200)
+df_aug["diastolic_bp"] = df_aug["diastolic_bp"].clip(40, 130)
+df_aug["blood_sugar"] = df_aug["blood_sugar"].clip(4, 20)
+df_aug["body_temp"] = df_aug["body_temp"].clip(95, 105)
+df_aug["heart_rate"] = df_aug["heart_rate"].clip(45, 160)
 
-# Save processed data
-df_combined['source'].to_csv('source_labels.csv', index=False)
-X_scaled.to_csv('X_scaled.csv', index=False)
-X_imputed.to_csv('X_raw.csv', index=False)
+df_aug["source"] = "augmented_10k"
 
-import pickle
-from sklearn.impute import SimpleImputer
-imputer = SimpleImputer(strategy='median')
-imputer.fit(X_imputed)
-pickle.dump(scaler, open('scaler.pkl', 'wb'))
-pickle.dump(imputer, open('imputer.pkl', 'wb'))
+# -----------------------------
+# 6. FINAL DATA
+# -----------------------------
+X_raw = df_aug[FEATURES].copy()
 
-print("\n" + "=" * 60)
-print("  [SUCCESS] Step 1 Complete!")
-print("  Saved: X_scaled.csv, X_raw.csv, scaler.pkl, imputer.pkl")
-print("=" * 60)
+imputer = SimpleImputer(strategy="median")
+X_imputed = imputer.fit_transform(X_raw)
 
-# Quick peek
-print(f"\nSample of combined data:")
-print(X_imputed.describe().round(2))
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_imputed)
+
+X_raw.to_csv("X_raw.csv", index=False)
+pd.DataFrame(X_scaled, columns=FEATURES).to_csv("X_scaled.csv", index=False)
+df_aug[["source"]].to_csv("source_labels.csv", index=False)
+
+pickle.dump(imputer, open("imputer.pkl", "wb"))
+pickle.dump(scaler, open("scaler.pkl", "wb"))
+pickle.dump(FEATURES, open("all_features.pkl", "wb"))
+
+print("=" * 70)
+print("STEP 1 COMPLETE")
+print("Saved:")
+print("X_raw.csv")
+print("X_scaled.csv")
+print("source_labels.csv")
+print("imputer.pkl")
+print("scaler.pkl")
+print("all_features.pkl")
+print("=" * 70)
+print(X_raw.describe().round(2))

@@ -1,1 +1,5 @@
-{"0": "LOW RISK (Stable)", "1": "HIGH RISK (Critical)", "2": "HIGH RISK (Critical)", "3": "LOW RISK (Stable)", "4": "MEDIUM RISK (Monitor)", "5": "LOW RISK (Stable)", "6": "HIGH RISK (Critical)", "7": "HIGH RISK (Critical)", "8": "LOW RISK (Stable)", "9": "MEDIUM RISK (Monitor)"}
+{
+    "0": "HIGH RISK",
+    "1": "LOW RISK",
+    "2": "MEDIUM RISK"
+}
